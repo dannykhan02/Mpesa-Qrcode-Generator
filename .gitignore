@@ -1,0 +1,29 @@
+# Bytecode and cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment (if not using a global one)
+venv/
+
+.env
+
+# Configuration and secret files (DO NOT expose credentials)
+config_settings.py
+
+generate_token.py
+
+
+# Dependency files (if using Pipenv)
+Pipfile.lock
+
+# Flask session and instance files
+instance/
+
+
+# Log files
+*.log
+
+# OAuth and authentication config
+oauth_config.py
