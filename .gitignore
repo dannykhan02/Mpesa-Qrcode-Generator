@@ -10,7 +10,7 @@ venv/
 .env
 
 # Configuration and secret files (DO NOT expose credentials)
-config_settings.py
+
 
 generate_token.py
 
@@ -19,11 +19,10 @@ generate_token.py
 Pipfile.lock
 
 # Flask session and instance files
-instance/
+
 
 
 # Log files
 *.log
 
 # OAuth and authentication config
-oauth_config.py

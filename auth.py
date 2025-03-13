@@ -11,7 +11,7 @@ from functools import wraps
 from uuid import uuid4
 from datetime import timedelta
 from flask_mail import Mail, Message
-from models import db, User, UserRole, MPesaAgent
+from models import db, User, UserRole, MPesaAgent, Merchant
 from config_settings import Config
 from oauth_config import oauth
 
@@ -123,14 +123,13 @@ def is_valid_safaricom_phone(phone: str, region="KE") -> bool:
 def validate_password(password: str) -> bool:
     return bool(re.match(r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$', password))
 
-@auth_bp.route('/admin/register-merchant', methods=['POST'])
-@role_required(UserRole.ADMIN.value)
-def register_merchant():
+@auth_bp.route('/register-first-admin', methods=['POST'])
+def register_first_admin():
     data = request.get_json()
     email = data.get("email")
-    phone = data.get("phone")
+    phone = data.get("phone_number")
     password = data.get("password")
-    full_name = data.get("full_name")  # Correct attribute name
+    full_name = data.get("full_name")
 
     if not is_valid_email(email):
         return jsonify({"msg": "Invalid email address"}), 400
@@ -141,88 +140,19 @@ def register_merchant():
     if not validate_password(password):
         return jsonify({"msg": "Password must be at least 8 characters long, contain letters and numbers"}), 400
 
-    if User.query.filter_by(email=email).first() or User.query.filter_by(phone_number=phone).first():
-        return jsonify({"msg": "Email or phone number already registered"}), 400
-
     hashed_password = generate_password_hash(password)
-    new_user = User(email=email, phone_number=phone, password=hashed_password, role=UserRole.MERCHANT, full_name=full_name)  # Correct attribute name
-    db.session.add(new_user)
+    new_admin = User(email=email, phone_number=phone, password=hashed_password, role=UserRole.ADMIN, full_name=full_name)
+    db.session.add(new_admin)
     db.session.commit()
 
-    return jsonify({"msg": "Merchant registered successfully"}), 201
-
-@auth_bp.route('/admin/register-agent', methods=['POST'])
-@role_required(UserRole.ADMIN.value)
-def register_agent():
-    data = request.get_json()
-    email = data.get("email")
-    phone = data.get("phone")
-    password = data.get("password")
-    full_name = data.get("full_name")  # Correct attribute name
-    store_name = data.get("store_name")
-    store_number = data.get("store_number")
-    location = data.get("location")
-
-    if not is_valid_email(email):
-        return jsonify({"msg": "Invalid email address"}), 400
-
-    if not phone or not is_valid_safaricom_phone(phone):
-        return jsonify({"msg": "Invalid phone number. Must be a valid Safaricom number."}), 400
-
-    if not validate_password(password):
-        return jsonify({"msg": "Password must be at least 8 characters long, contain letters and numbers"}), 400
-
-    if User.query.filter_by(email=email).first() or User.query.filter_by(phone_number=phone).first():
-        return jsonify({"msg": "Email or phone number already registered"}), 400
-
-    hashed_password = generate_password_hash(password)
-    new_user = User(email=email, phone_number=phone, password=hashed_password, role=UserRole.AGENT, full_name=full_name)  # Correct attribute name
-    db.session.add(new_user)
-    db.session.commit()
-
-    new_agent = MPesaAgent(store_name=store_name, store_number=store_number,
-                           agent_number=phone, location=location, user_id=new_user.id)
-    db.session.add(new_agent)
-    db.session.commit()
-
-    return jsonify({"msg": "Agent registered successfully"}), 201
-
-
-# @auth_bp.route('/register-first-admin', methods=['POST'])
-# def register_first_admin():
-#     data = request.get_json()
-#     email = data.get("email")
-#     phone = data.get("phone")
-#     password = data.get("password")
-#     full_name = data.get("full_name")  # Correct attribute name
-
-#     if not is_valid_email(email):
-#         return jsonify({"msg": "Invalid email address"}), 400
-
-#     if not phone or not is_valid_safaricom_phone(phone):
-#         return jsonify({"msg": "Invalid phone number. Must be a valid Safaricom number."}), 400
-
-#     if not validate_password(password):
-#         return jsonify({"msg": "Password must be at least 8 characters long, contain letters and numbers"}), 400
-
-#     if User.query.filter_by(email=email).first() or User.query.filter_by(phone_number=phone).first():
-#         return jsonify({"msg": "Email or phone number already registered"}), 400
-
-#     hashed_password = generate_password_hash(password)
-#     new_admin = User(email=email, phone_number=phone, password=hashed_password, role=UserRole.ADMIN, full_name=full_name)  # Correct attribute name
-#     db.session.add(new_admin)
-#     db.session.commit()
-
-#     return jsonify({"msg": "First admin registered successfully"}), 201
-
-
+    return jsonify({"msg": "First admin registered successfully"}), 201
 
 @auth_bp.route('/admin/register-admin', methods=['POST'])
 @role_required(UserRole.ADMIN.value)
 def register_admin():
     data = request.get_json()
     email = data.get("email")
-    phone = data.get("phone")
+    phone = data.get("phone_number")
     password = data.get("password")
     full_name = data.get("full_name")
 
@@ -239,11 +169,157 @@ def register_admin():
         return jsonify({"msg": "Email or phone number already registered"}), 400
 
     hashed_password = generate_password_hash(password)
-    new_admin = User(email=email, phone_number=phone, password=hashed_password, role=UserRole.ADMIN, userfullnames=full_name)
+    new_admin = User(email=email, phone_number=phone, password=hashed_password, role=UserRole.ADMIN, full_name=full_name)
     db.session.add(new_admin)
     db.session.commit()
 
     return jsonify({"msg": "Admin registered successfully"}), 201
+
+@auth_bp.route('/admin/register-merchant', methods=['POST'])
+@role_required(UserRole.ADMIN.value)
+def register_merchant():
+    data = request.get_json()
+    email = data.get("email")
+    phone = data.get("phone_number")
+    password = data.get("password")
+    full_name = data.get("full_name")
+    business_name = data.get("business_name")
+    merchant_type = data.get("merchant_type")
+
+    if not is_valid_email(email):
+        return jsonify({"msg": "Invalid email address"}), 400
+
+    if not phone or not is_valid_safaricom_phone(phone):
+        return jsonify({"msg": "Invalid phone number. Must be a valid Safaricom number."}), 400
+
+    if not validate_password(password):
+        return jsonify({"msg": "Password must be at least 8 characters long, contain letters and numbers"}), 400
+
+    # Check if user with the same email already exists
+    existing_user = User.query.filter_by(email=email).first()
+
+    if existing_user:
+        user_id = existing_user.id  # Reuse the existing user ID
+    else:
+        hashed_password = generate_password_hash(password)
+        new_user = User(email=email, phone_number=phone, password=hashed_password, role=UserRole.MERCHANT, full_name=full_name)
+        db.session.add(new_user)
+        db.session.commit()
+        user_id = new_user.id  # Get the new user ID
+
+    # Check if business name already exists for the same user (to prevent duplicates)
+    existing_merchant = Merchant.query.filter_by(user_id=user_id, business_name=business_name).first()
+    if existing_merchant:
+        return jsonify({"msg": "Merchant with this business name already exists for this user"}), 400
+
+    if merchant_type == 'Paybill':
+        paybill_number = data.get("paybill_number")
+        account_number = data.get("account_number")
+        if not paybill_number or not account_number:
+            return jsonify({"msg": "Paybill number and account number are required for Paybill merchants"}), 400
+        new_merchant = Merchant(
+            business_name=business_name,
+            phone_number=phone,
+            full_name=full_name,
+            paybill_number=paybill_number,
+            account_number=account_number,
+            merchant_type='Paybill',
+            user_id=user_id,
+            email=email
+        )
+    elif merchant_type == 'Till':
+        till_number = data.get("till_number")
+        if not till_number:
+            return jsonify({"msg": "Till number is required for Till merchants"}), 400
+        new_merchant = Merchant(
+            business_name=business_name,
+            phone_number=phone,
+            full_name=full_name,
+            till_number=till_number,
+            merchant_type='Till',
+            user_id=user_id,
+            email=email
+        )
+    elif merchant_type == 'Pochi':
+        pochi_number = data.get("pochi_number")
+        if not pochi_number:
+            return jsonify({"msg": "Pochi number is required for Pochi merchants"}), 400
+        new_merchant = Merchant(
+            business_name=business_name,
+            phone_number=phone,
+            full_name=full_name,
+            pochi_number=pochi_number,
+            merchant_type='Pochi',
+            user_id=user_id,
+            email=email
+        )
+    else:
+        return jsonify({"msg": "Invalid merchant type"}), 400
+
+    db.session.add(new_merchant)
+    db.session.commit()
+
+    return jsonify({"msg": "Merchant registered successfully"}), 201
+
+
+@auth_bp.route('/admin/register-agent', methods=['POST'])
+@role_required(UserRole.ADMIN.value)
+def register_agent():
+    data = request.get_json()
+    email = data.get("email")
+    phone = data.get("phone_number")
+    password = data.get("password")
+    full_name = data.get("full_name")
+    store_name = data.get("store_name")  # Store name must be unique per agent
+    agent_number = data.get("agent_number")
+    store_number = data.get("store_number")
+    location = data.get("location")
+    agent_type = data.get("agent_type")
+
+    # Validate Email
+    if not is_valid_email(email):
+        return jsonify({"msg": "Invalid email address"}), 400
+
+    # Validate Phone Number
+    if not phone or not is_valid_safaricom_phone(phone):
+        return jsonify({"msg": "Invalid phone number. Must be a valid Safaricom number."}), 400
+
+    # Validate Password
+    if not validate_password(password):
+        return jsonify({"msg": "Password must be at least 8 characters long, contain letters and numbers"}), 400
+
+    # Check if the store name already exists
+    existing_agent = MPesaAgent.query.filter_by(store_name=store_name).first()
+    if existing_agent:
+        return jsonify({"msg": "An agent store with this name already exists"}), 400
+
+    # Check if a user with the same email exists
+    user = User.query.filter_by(email=email).first()
+
+    if not user:
+        # If no user exists with this email, create a new one
+        hashed_password = generate_password_hash(password)
+        user = User(email=email, phone_number=phone, password=hashed_password, role=UserRole.AGENT, full_name=full_name)
+        db.session.add(user)
+        db.session.commit()
+
+    # Register the agent under the user
+    new_agent = MPesaAgent(
+        store_name=store_name,
+        phone_number=phone,
+        full_name=full_name,
+        store_number=store_number,
+        agent_number=agent_number,
+        location=location,
+        user_id=user.id,
+        email=email,
+        agent_type=agent_type
+    )
+    db.session.add(new_agent)
+    db.session.commit()
+
+    return jsonify({"msg": "Agent registered successfully"}), 201
+
 
 @auth_bp.route('/login', methods=['POST'])
 def login():
@@ -276,7 +352,7 @@ def logout():
 @auth_bp.route('/forgot-password', methods=['POST'])
 def forgot_password():
     from app import mail
-    from itsdangerous import URLSafeTimedSerializer
+    from itsdangerous import URLSafeSerializer
 
     data = request.get_json()
     email = data.get("email")
@@ -285,7 +361,7 @@ def forgot_password():
     if not user:
         return jsonify({"msg": "Email not found"}), 404
 
-    serializer = URLSafeTimedSerializer(Config.SECRET_KEY)
+    serializer = URLSafeSerializer(Config.SECRET_KEY)
     token = serializer.dumps(email, salt="reset-password-salt")
     reset_link = url_for('auth.reset_password', token=token, _external=True)
 
@@ -297,9 +373,9 @@ def forgot_password():
 
 @auth_bp.route('/reset-password/<token>', methods=['POST'])
 def reset_password(token):
-    from itsdangerous import URLSafeTimedSerializer
+    from itsdangerous import URLSafeSerializer
 
-    serializer = URLSafeTimedSerializer(Config.SECRET_KEY)
+    serializer = URLSafeSerializer(Config.SECRET_KEY)
     try:
         email = serializer.loads(token, salt="reset-password-salt", max_age=3600)
     except:
